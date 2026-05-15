@@ -1,0 +1,6 @@
+[integration]
+name = "weather"
+description = "A simple weather integration using Deno"
+tools = "./integrations/weather_tools.json"
+executor = "deno run -A ./integrations/weather.js"
+enabled = true

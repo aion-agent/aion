@@ -1,0 +1,1 @@
+SELECT value FROM memory WHERE key = ?1
