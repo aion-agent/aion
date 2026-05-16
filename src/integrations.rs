@@ -35,7 +35,7 @@ pub struct ToolSchema {
 
 
 
-pub fn build_system_prompt(integrations: &[Integration]) -> String {
+pub fn build_system_prompt(template_path: &Path, integrations: &[Integration]) -> String {
     let memory_tools = serde_json::json!([
         {
             "name": "memory_write",
@@ -99,21 +99,10 @@ pub fn build_system_prompt(integrations: &[Integration]) -> String {
             .collect::<Vec<_>>()
     ]);
 
-    format!(
-        r#"You are Aion, a local AI agent with persistent memory and tool access.
-
-<tools>
-{}
-</tools>
-
-When you want to call a tool respond with:
-<tool_call>
-{{"name": "tool_name", "arguments": {{...}}}}
-</tool_call>
-
-Think step by step. Wait for tool results before continuing."#,
-        serde_json::to_string_pretty(&all_tools).unwrap()
-    )
+    let template = fs::read_to_string(template_path)
+        .unwrap_or_else(|_| "Failed to load system prompt.".to_string());
+        
+    template.replace("{{TOOLS}}", &serde_json::to_string_pretty(&all_tools).unwrap())
 }
 
 pub fn load_integration(path: &Path) -> anyhow::Result<Integration> {

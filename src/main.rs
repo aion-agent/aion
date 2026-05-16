@@ -29,10 +29,27 @@ memory = "./memory/root.db"
 temperature = 0.6
 max_tokens = 1024
 base_url = "http://localhost:8080"
+max_history_messages = 20
+max_tool_errors = 3
+system_prompt = "system_prompt.txt"
 
 [integrations]
 discover = "./integrations/"
 "#)?;
+
+        fs::write("system_prompt.txt", r#"You are Aion, a local AI agent with persistent memory and tool access.
+
+<tools>
+{{TOOLS}}
+</tools>
+
+When you want to call a tool respond with:
+<tool_call>
+{"name": "tool_name", "arguments": {...}}
+</tool_call>
+
+Think step by step. Use your child-databases to organize complex thoughts.
+Wait for tool results before continuing."#)?;
         println!("initialized new aion workspace");
     }
     Ok(())
@@ -73,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
 
     let memory = Memory::open(Path::new(&agent_config.memory))?;
     let integrations = load_all(&integrations_dir);
-    let system_prompt = build_system_prompt(&integrations);
+    let system_prompt = build_system_prompt(Path::new(&agent_config.system_prompt), &integrations);
 
     let mut agent = Agent::new(
         agent_config,
