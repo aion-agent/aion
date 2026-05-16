@@ -1,0 +1,6 @@
+[integration]
+name = "fs"
+description = "File System interactions"
+tools = "./integrations/fs_tools.json"
+executor = "deno run --allow-read --allow-write ./integrations/fs.js"
+enabled = true

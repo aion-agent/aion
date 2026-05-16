@@ -1,0 +1,15 @@
+[
+  {
+    "name": "file_system",
+    "description": "Read or write a file to the local file system.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["read", "write"] },
+        "path": { "type": "string" },
+        "content": { "type": "string", "description": "Content to write (only required for write action)" }
+      },
+      "required": ["action", "path"]
+    }
+  }
+]

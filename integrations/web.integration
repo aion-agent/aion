@@ -1,0 +1,6 @@
+[integration]
+name = "web_search"
+description = "Web search via Tavily API"
+tools = "./integrations/web_tools.json"
+executor = "deno run --allow-net --allow-env ./integrations/web.js"
+enabled = true

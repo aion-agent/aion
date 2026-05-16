@@ -1,0 +1,13 @@
+[
+  {
+    "name": "execute_shell",
+    "description": "Execute a safe bash shell command.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "command": { "type": "string" }
+      },
+      "required": ["command"]
+    }
+  }
+]

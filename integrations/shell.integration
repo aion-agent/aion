@@ -1,0 +1,6 @@
+[integration]
+name = "shell"
+description = "Execute shell commands"
+tools = "./integrations/shell_tools.json"
+executor = "deno run --allow-run ./integrations/shell.js"
+enabled = true
