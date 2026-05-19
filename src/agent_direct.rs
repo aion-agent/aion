@@ -60,6 +60,7 @@ impl Agent {
 
             let mut full_reply = String::new();
             let mut suppress_output = false;
+            let mut printed_prefix = false;
 
             while let Some(event) = stream.next().await {
                 match event {
@@ -76,6 +77,11 @@ impl Agent {
                                 }
 
                                 if !suppress_output {
+                                    if !printed_prefix {
+                                        print!("aion: ");
+                                        io::stdout().flush()?;
+                                        printed_prefix = true;
+                                    }
                                     print!("{}", content);
                                     io::stdout().flush()?;
                                 }
@@ -89,7 +95,7 @@ impl Agent {
                 }
             }
             
-            if !suppress_output {
+            if !suppress_output && printed_prefix {
                 println!();
             }
 
@@ -101,13 +107,13 @@ impl Agent {
                     let result = execute_tool(&call, &self.memory, &self.integrations);
                     let response_xml = format!("<tool_response>\n{}\n</tool_response>", serde_json::to_string_pretty(&result).unwrap_or_default());
                     
-                    self.history.push(json!({"role": "tool", "content": response_xml}));
+                    self.history.push(json!({"role": "user", "content": response_xml}));
                     consecutive_errors = 0;
                 },
                 Err(e) => {
                     println!("=> Tool parse error: {}", e);
                     let response_xml = format!("<tool_response>\n{{\"error\": \"{}\"}}\n</tool_response>", e.replace("\"", "\\\""));
-                    self.history.push(json!({"role": "tool", "content": response_xml}));
+                    self.history.push(json!({"role": "user", "content": response_xml}));
                     
                     consecutive_errors += 1;
                     if consecutive_errors >= self.config.max_tool_errors {

@@ -17,8 +17,7 @@ use config::load_config;
 mod tool_call;
 
 fn ensure_workspace() -> anyhow::Result<()> {
-    let dir = std::env::current_dir()?;
-    if fs::read_dir(&dir)?.next().is_none() {
+    if !Path::new("root.toml").exists() {
         fs::create_dir_all("integrations")?;
         fs::create_dir_all("memory")?;
         fs::create_dir_all("tools")?;
@@ -50,6 +49,91 @@ When you want to call a tool respond with:
 
 Think step by step. Use your child-databases to organize complex thoughts.
 Wait for tool results before continuing."#)?;
+
+        // Seed default FS integration
+        fs::write("integrations/fs.integration", r#"[integration]
+name = "fs"
+description = "File System interactions"
+tools = "./integrations/fs_tools.json"
+executor = "deno run --allow-read --allow-write ./integrations/fs.js"
+enabled = true"#)?;
+
+        fs::write("integrations/fs_tools.json", r#"[
+  {
+    "name": "file_system",
+    "description": "Read or write a file to the local file system.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["read", "write"] },
+        "path": { "type": "string" },
+        "content": { "type": "string", "description": "Content to write (only required for write action)" }
+      },
+      "required": ["action", "path"]
+    }
+  }
+]"#)?;
+
+        fs::write("integrations/fs.js", r#"const input = await new Response(Deno.stdin.readable).text();
+const { action, path, content } = JSON.parse(input);
+
+try {
+    if (action === "read") {
+        const text = await Deno.readTextFile(path);
+        console.log(JSON.stringify({ status: "success", content: text }));
+    } else if (action === "write") {
+        await Deno.writeTextFile(path, content);
+        console.log(JSON.stringify({ status: "success", message: `Wrote to ${path}` }));
+    } else {
+        console.log(JSON.stringify({ error: "Invalid action. Use 'read' or 'write'." }));
+    }
+} catch (e) {
+    console.log(JSON.stringify({ error: e.message }));
+}"#)?;
+
+        // Seed default Shell integration
+        fs::write("integrations/shell.integration", r#"[integration]
+name = "shell"
+description = "Execute shell commands"
+tools = "./integrations/shell_tools.json"
+executor = "deno run --allow-run ./integrations/shell.js"
+enabled = true"#)?;
+
+        fs::write("integrations/shell_tools.json", r#"[
+  {
+    "name": "execute_shell",
+    "description": "Execute a safe bash shell command.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "command": { "type": "string" }
+      },
+      "required": ["command"]
+    }
+  }
+]"#)?;
+
+        fs::write("integrations/shell.js", r#"const input = await new Response(Deno.stdin.readable).text();
+const args = JSON.parse(input);
+const { command } = args;
+
+try {
+    const p = new Deno.Command("sh", {
+        args: ["-c", command],
+        stdout: "piped",
+        stderr: "piped"
+    });
+    const { code, stdout, stderr } = await p.output();
+    console.log(JSON.stringify({
+        status: code === 0 ? "success" : "error",
+        exit_code: code,
+        stdout: new TextDecoder().decode(stdout).trim(),
+        stderr: new TextDecoder().decode(stderr).trim()
+    }));
+} catch (e) {
+    console.log(JSON.stringify({ error: e.message }));
+}"#)?;
+
         println!("initialized new aion workspace");
     }
     Ok(())
@@ -99,14 +183,18 @@ async fn main() -> anyhow::Result<()> {
         integrations,
     );
 
+    use std::io::{self, Write};
     let mut input = String::new();
     loop {
+        print!("user> ");
+        io::stdout().flush()?;
+
         input.clear();
-        std::io::stdin().read_line(&mut input)?;
+        io::stdin().read_line(&mut input)?;
         let trimmed = input.trim();
         if trimmed == "exit" { break; }
-        let reply = agent.step(trimmed).await?;
-        println!("aion: {reply}");
+        
+        let _reply = agent.step(trimmed).await?;
     }
 
     Ok(())
