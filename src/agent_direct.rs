@@ -15,10 +15,17 @@ pub struct Agent {
     pub memory: Memory,
     pub integrations: Vec<Integration>,
     history: Vec<Value>,
+    use_openrouter: bool,
 }
 
 impl Agent {
-    pub fn new(config: AgentConfig, system_prompt: String, memory: Memory, integrations: Vec<Integration>) -> Self {
+    pub fn new(
+        config: AgentConfig,
+        system_prompt: String,
+        memory: Memory,
+        integrations: Vec<Integration>,
+        use_openrouter: bool,
+    ) -> Self {
         Self {
             client: Client::new(),
             history: vec![json!({
@@ -28,6 +35,7 @@ impl Agent {
             config,
             memory,
             integrations,
+            use_openrouter,
         }
     }
 
@@ -45,8 +53,19 @@ impl Agent {
                 self.history = new_history;
             }
 
-            let mut stream = self.client
-                .post(format!("{}/v1/chat/completions", self.config.base_url))
+            let request = if self.use_openrouter {
+                let api_key = self.config.openrouter_api_key.as_deref().ok_or_else(|| {
+                    anyhow::anyhow!("OpenRouter API key is missing from config [agent] openrouter_api_key")
+                })?;
+                self.client
+                    .post("https://openrouter.ai/api/v1/chat/completions")
+                    .header("Authorization", format!("Bearer {}", api_key))
+            } else {
+                self.client
+                    .post(format!("{}/v1/chat/completions", self.config.base_url))
+            };
+
+            let mut stream = request
                 .json(&json!({
                     "model": self.config.model,
                     "messages": self.history,

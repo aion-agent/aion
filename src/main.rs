@@ -31,6 +31,8 @@ base_url = "http://localhost:8080"
 max_history_messages = 20
 max_tool_errors = 3
 system_prompt = "system_prompt.txt"
+# openrouter_model = "meta-llama/llama-3.1-8b-instruct:free"
+# openrouter_api_key = "your-openrouter-api-key"
 
 [integrations]
 discover = "./integrations/"
@@ -144,7 +146,18 @@ async fn main() -> anyhow::Result<()> {
     ensure_workspace()?;
 
     let matches = command!()
-        .arg(arg!([model_name] "The model name"))
+        .arg(
+            arg!(-m --model <MODEL> "The model name")
+                .required(false),
+        )
+        .arg(
+            clap::Arg::new("openrouter")
+                .long("openrouter")
+                .short('o')
+                .alias("ol")
+                .action(clap::ArgAction::SetTrue)
+                .help("Use OpenRouter API"),
+        )
         .arg(
             arg!(-c --config <FILE> "The configuration file")
                 .value_parser(value_parser!(PathBuf)),
@@ -161,9 +174,17 @@ async fn main() -> anyhow::Result<()> {
 
     let config = load_config(&config_path)?;
 
-    let model = matches.get_one::<String>("model_name")
-        .cloned()
-        .unwrap_or_else(|| config.agent.model.clone());
+    let use_openrouter = matches.get_flag("openrouter");
+
+    let model_opt = matches.get_one::<String>("model").cloned();
+    let model = if use_openrouter {
+        model_opt
+            .or_else(|| config.agent.openrouter_model.clone())
+            .ok_or_else(|| anyhow::anyhow!("No OpenRouter model specified in config or command line via -m"))?
+    } else {
+        model_opt
+            .unwrap_or_else(|| config.agent.model.clone())
+    };
 
     let mut agent_config = config.agent.clone();
     agent_config.model = model;
@@ -181,6 +202,7 @@ async fn main() -> anyhow::Result<()> {
         system_prompt,
         memory,
         integrations,
+        use_openrouter,
     );
 
     use std::io::{self, Write};
@@ -190,7 +212,8 @@ async fn main() -> anyhow::Result<()> {
         io::stdout().flush()?;
 
         input.clear();
-        io::stdin().read_line(&mut input)?;
+        let bytes_read = io::stdin().read_line(&mut input)?;
+        if bytes_read == 0 { break; }
         let trimmed = input.trim();
         if trimmed == "exit" { break; }
         

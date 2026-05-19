@@ -1,0 +1,15 @@
+[agent]
+name = "aion"
+model = "hermes-3"
+memory = "./memory/root.db"
+temperature = 0.6
+max_tokens = 1024
+base_url = "http://localhost:8080"
+max_history_messages = 20
+max_tool_errors = 3
+system_prompt = "system_prompt.txt"
+# openrouter_model = "meta-llama/llama-3.1-8b-instruct:free"
+# openrouter_api_key = "your-openrouter-api-key"
+
+[integrations]
+discover = "./integrations/"

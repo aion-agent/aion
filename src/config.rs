@@ -25,6 +25,8 @@ pub struct AgentConfig {
     pub max_tool_errors: usize,
     #[serde(default = "default_system_prompt")]
     pub system_prompt: String,
+    pub openrouter_model: Option<String>,
+    pub openrouter_api_key: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
