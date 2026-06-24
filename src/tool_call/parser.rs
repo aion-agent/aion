@@ -9,7 +9,7 @@ pub struct ToolCallRequest {
 pub fn extract_tool_call(text: &str) -> Result<Option<ToolCallRequest>, String> {
     let start_tag = "<tool_call>";
     let end_tag = "</tool_call>";
-    
+
     if let Some(start_idx) = text.find(start_tag) {
         let content_after_start = &text[start_idx + start_tag.len()..];
         if let Some(end_idx) = content_after_start.find(end_tag) {

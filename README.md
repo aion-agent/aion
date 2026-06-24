@@ -1,45 +1,64 @@
-# Aion Local AI Agent
+# Aion — Local AI Agent
 
-Aion is a highly modular, local-first AI agent written in Rust. It is engineered specifically to interface with local OpenAI-compatible endpoints (like `llama.cpp` serving Hermes models) to orchestrate complex tool-calling and long-term memory management.
+Aion is a modular, local-first AI agent written in Rust. It connects to any OpenAI-compatible LLM endpoint (e.g. `llama.cpp` serving Hermes models) and provides a full-screen terminal dashboard with persistent hierarchical memory and dynamically loaded tool integrations.
 
 ## Features
 
-- **Hermes Tool Calling Protocol**: Aion features a custom ChatML parser that streams LLM responses to your terminal while silently buffering and executing `<tool_call>` XML blocks in the background.
-- **Hierarchical Memory**: Built on top of `rusqlite` and `fts5`, Aion manages a long-term `root.db` memory store and can autonomously spawn isolated "child scopes" for compartmentalized reasoning.
-- **Dynamic Deno Integrations**: Extend Aion's capabilities without recompiling. Drop `.integration` TOML files and Deno JavaScript scripts into the `integrations/` directory, and Aion will dynamically load and execute them via secure subprocesses.
-- **Streaming UI**: Enjoy low-latency streaming responses directly in your terminal.
-- **Fail-Safe Configurations**: Configurable sliding context windows (`max_history_messages`) and retry limits (`max_tool_errors`) prevent infinite loops and context limit crashes.
+- **Full-screen Ratatui TUI** — An interactive terminal dashboard with three tabs: Chat, Integrations Manager, and Settings Editor. No plain REPL — everything is managed from within the TUI.
+- **Hermes Tool Calling Protocol** — A custom ChatML-style XML parser that streams LLM tokens to the chat view while silently buffering and executing `<tool_call>` XML blocks in the background.
+- **Hierarchical Memory Scopes** — Built on `rusqlite` + FTS5, Aion maintains a persistent `root.db` and can create and switch between isolated child databases for compartmentalized reasoning per project or task. Scope switching is a live, tool-driven operation.
+- **Dynamic Deno Integrations** — Extend Aion without recompiling. Drop a `.toml` manifest and a Deno JS/TS script into `integrations/` and it is auto-loaded on next boot. Toggle integrations on/off live from the TUI.
+- **Async Streaming** — LLM tokens stream in real-time into the TUI chat view via `tokio::sync::mpsc` channels. External tool subprocesses are fully async via `tokio::process::Command`.
+- **OpenRouter Support** — Switch between local and cloud inference with `--openrouter` flag or configure it in `root.toml`.
+- **Fail-Safe Loop** — Configurable `max_history_messages` (sliding context window) and `max_tool_errors` (error circuit breaker) prevent runaway loops.
 
 ## Quickstart
 
 ### Prerequisites
-1. **Rust**: Make sure you have `cargo` installed.
-2. **Deno**: Required to run the default external integrations safely.
-3. **LLM Server**: A local inference server running a tool-calling capable model (e.g., Hermes 2 Pro or Hermes 3).
-   - *Example*: `llama-cpp-server -m Hermes-3-Llama-3-8B.gguf --port 8080`
+
+1. **Rust** — Install via [rustup.rs](https://rustup.rs)
+2. **Deno** — Required for the default external integrations. Install via [deno.land](https://deno.land)
+3. **LLM Server** — A local OpenAI-compatible inference server running a tool-calling capable model.
+   - *Example*: `llama-server -m Hermes-3-Llama-3.1-8B.gguf --port 8080`
+   - Or use OpenRouter (cloud) with the `--openrouter` flag.
 
 ### Running Aion
 
-1. Clone the repository and run Aion:
 ```bash
 git clone https://github.com/aion-agent/aion.git
 cd aion
 cargo run
 ```
 
-2. On its first boot, Aion will automatically scaffold your workspace:
-   - Generating `root.toml` (your main config).
-   - Generating `system_prompt.txt` (the hackable system prompt).
-   - Initializing the `memory/` SQLite databases.
-   - Initializing the `integrations/` directory.
+On first boot, Aion auto-scaffolds your workspace:
+- `root.toml` — your main configuration file
+- `system_prompt.txt` — the hackable system prompt template
+- `memory/root.db` — the persistent SQLite memory store
+- `integrations/` — directory for dynamic tool integrations (seeded with `fs`, `shell`, `weather`, `web`)
 
-3. Type your prompt in the CLI:
-```text
-aion: Please search the web for the latest Rust release and save it to my memory.
+### CLI Flags
+
 ```
+-m, --model <MODEL>           Override the model name
+-o, --openrouter              Use OpenRouter API instead of local endpoint
+-c, --config <FILE>           Use a custom config file (default: root.toml)
+-i, --integrations <DIR>      Use a custom integrations directory
+```
+
+## TUI Navigation
+
+| Key | Action |
+|---|---|
+| `1` / `2` / `3` | Switch to Chat / Integrations / Settings tab |
+| `Tab` / `←` `→` | Cycle between tabs |
+| `i` | Focus the chat input box |
+| `Esc` | Unfocus input — scroll chat history |
+| `↑` / `↓` | Scroll history or navigate lists |
+| `Space` / `Enter` | Toggle integration on/off (Integrations tab) or edit field (Settings tab) |
+| `Ctrl+C` | Exit and restore terminal |
 
 ## Documentation
 
-For a deep dive into Aion's mechanics, please refer to the `docs/` directory:
 - [Usage Guide & Custom Tools](docs/usage_guide.md)
 - [Architecture & Roadmap](docs/architecture_and_roadmap.md)
+- [Vector Memory Roadmap](docs/vector_memory_roadmap.md)

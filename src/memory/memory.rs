@@ -43,17 +43,12 @@ impl Memory {
 
     pub fn search(&self, query: &str) -> anyhow::Result<Vec<(String, String)>> {
         let mut stmt = self.conn.prepare(QUERY_SEARCH)?;
-        let rows = stmt.query_map(params![query], |r| {
-            Ok((r.get(0)?, r.get(1)?))
-        })?;
+        let rows = stmt.query_map(params![query], |r| Ok((r.get(0)?, r.get(1)?)))?;
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
 
     pub fn create_child(&self, name: &str, reason: &str) -> anyhow::Result<Memory> {
-        let child_path = self.path
-            .parent()
-            .unwrap()
-            .join(format!("{}.db", name));
+        let child_path = self.path.parent().unwrap().join(format!("{}.db", name));
 
         self.conn.execute(
             QUERY_REGISTER_CHILD,

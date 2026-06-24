@@ -1,9 +1,9 @@
+use clap::{arg, command, value_parser};
 use std::fs;
 use std::path::{Path, PathBuf};
-use clap::{arg, command, value_parser};
 
 mod integrations;
-use integrations::{load_all, build_system_prompt};
+use integrations::{build_system_prompt, load_all};
 
 mod agent_direct;
 use agent_direct::Agent;
@@ -15,13 +15,34 @@ mod config;
 use config::load_config;
 
 mod tool_call;
+mod tui;
 
 fn ensure_workspace() -> anyhow::Result<()> {
+    // Migration: rename existing .integration files to .toml
+    if Path::new("integrations").exists() {
+        if let Ok(entries) = fs::read_dir("integrations") {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path
+                    .extension()
+                    .map(|x| x == "integration")
+                    .unwrap_or(false)
+                {
+                    let mut new_path = path.clone();
+                    new_path.set_extension("toml");
+                    let _ = fs::rename(&path, &new_path);
+                }
+            }
+        }
+    }
+
     if !Path::new("root.toml").exists() {
         fs::create_dir_all("integrations")?;
         fs::create_dir_all("memory")?;
         fs::create_dir_all("tools")?;
-        fs::write("root.toml", r#"[agent]
+        fs::write(
+            "root.toml",
+            r#"[agent]
 name = "aion"
 model = "hermes-3"
 memory = "./memory/root.db"
@@ -36,9 +57,12 @@ system_prompt = "system_prompt.txt"
 
 [integrations]
 discover = "./integrations/"
-"#)?;
+"#,
+        )?;
 
-        fs::write("system_prompt.txt", r#"You are Aion, a local AI agent with persistent memory and tool access.
+        fs::write(
+            "system_prompt.txt",
+            r#"You are Aion, a local AI agent with persistent memory and tool access.
 
 <tools>
 {{TOOLS}}
@@ -50,17 +74,23 @@ When you want to call a tool respond with:
 </tool_call>
 
 Think step by step. Use your child-databases to organize complex thoughts.
-Wait for tool results before continuing."#)?;
+Wait for tool results before continuing."#,
+        )?;
 
         // Seed default FS integration
-        fs::write("integrations/fs.integration", r#"[integration]
+        fs::write(
+            "integrations/fs.toml",
+            r#"[integration]
 name = "fs"
 description = "File System interactions"
 tools = "./integrations/fs_tools.json"
 executor = "deno run --allow-read --allow-write ./integrations/fs.js"
-enabled = true"#)?;
+enabled = true"#,
+        )?;
 
-        fs::write("integrations/fs_tools.json", r#"[
+        fs::write(
+            "integrations/fs_tools.json",
+            r#"[
   {
     "name": "file_system",
     "description": "Read or write a file to the local file system.",
@@ -74,9 +104,12 @@ enabled = true"#)?;
       "required": ["action", "path"]
     }
   }
-]"#)?;
+]"#,
+        )?;
 
-        fs::write("integrations/fs.js", r#"const input = await new Response(Deno.stdin.readable).text();
+        fs::write(
+            "integrations/fs.js",
+            r#"const input = await new Response(Deno.stdin.readable).text();
 const { action, path, content } = JSON.parse(input);
 
 try {
@@ -91,17 +124,23 @@ try {
     }
 } catch (e) {
     console.log(JSON.stringify({ error: e.message }));
-}"#)?;
+}"#,
+        )?;
 
         // Seed default Shell integration
-        fs::write("integrations/shell.integration", r#"[integration]
+        fs::write(
+            "integrations/shell.toml",
+            r#"[integration]
 name = "shell"
 description = "Execute shell commands"
 tools = "./integrations/shell_tools.json"
 executor = "deno run --allow-run ./integrations/shell.js"
-enabled = true"#)?;
+enabled = true"#,
+        )?;
 
-        fs::write("integrations/shell_tools.json", r#"[
+        fs::write(
+            "integrations/shell_tools.json",
+            r#"[
   {
     "name": "execute_shell",
     "description": "Execute a safe bash shell command.",
@@ -113,9 +152,12 @@ enabled = true"#)?;
       "required": ["command"]
     }
   }
-]"#)?;
+]"#,
+        )?;
 
-        fs::write("integrations/shell.js", r#"const input = await new Response(Deno.stdin.readable).text();
+        fs::write(
+            "integrations/shell.js",
+            r#"const input = await new Response(Deno.stdin.readable).text();
 const args = JSON.parse(input);
 const { command } = args;
 
@@ -134,7 +176,8 @@ try {
     }));
 } catch (e) {
     console.log(JSON.stringify({ error: e.message }));
-}"#)?;
+}"#,
+        )?;
 
         println!("initialized new aion workspace");
     }
@@ -146,10 +189,7 @@ async fn main() -> anyhow::Result<()> {
     ensure_workspace()?;
 
     let matches = command!()
-        .arg(
-            arg!(-m --model <MODEL> "The model name")
-                .required(false),
-        )
+        .arg(arg!(-m --model <MODEL> "The model name").required(false))
         .arg(
             clap::Arg::new("openrouter")
                 .long("openrouter")
@@ -158,17 +198,15 @@ async fn main() -> anyhow::Result<()> {
                 .action(clap::ArgAction::SetTrue)
                 .help("Use OpenRouter API"),
         )
-        .arg(
-            arg!(-c --config <FILE> "The configuration file")
-                .value_parser(value_parser!(PathBuf)),
-        )
+        .arg(arg!(-c --config <FILE> "The configuration file").value_parser(value_parser!(PathBuf)))
         .arg(
             arg!(-i --integrations <DIRECTORY> "The integrations directory")
                 .value_parser(value_parser!(PathBuf)),
         )
         .get_matches();
 
-    let config_path = matches.get_one::<PathBuf>("config")
+    let config_path = matches
+        .get_one::<PathBuf>("config")
         .cloned()
         .unwrap_or_else(|| PathBuf::from("root.toml"));
 
@@ -180,16 +218,21 @@ async fn main() -> anyhow::Result<()> {
     let model = if use_openrouter {
         model_opt
             .or_else(|| config.agent.openrouter_model.clone())
-            .ok_or_else(|| anyhow::anyhow!("No OpenRouter model specified in config or command line via -m"))?
+            .ok_or_else(|| {
+                anyhow::anyhow!("No OpenRouter model specified in config or command line via -m")
+            })?
     } else {
-        model_opt
-            .unwrap_or_else(|| config.agent.model.clone())
+        model_opt.unwrap_or_else(|| config.agent.model.clone())
     };
 
     let mut agent_config = config.agent.clone();
     agent_config.model = model;
 
-    let integrations_dir = matches.get_one::<PathBuf>("integrations")
+    // Print agent name to show usage and prevent unused warnings
+    println!("Loading configurations for Agent: {}", agent_config.name);
+
+    let integrations_dir = matches
+        .get_one::<PathBuf>("integrations")
         .cloned()
         .unwrap_or_else(|| PathBuf::from(&config.integrations.discover));
 
@@ -197,7 +240,7 @@ async fn main() -> anyhow::Result<()> {
     let integrations = load_all(&integrations_dir);
     let system_prompt = build_system_prompt(Path::new(&agent_config.system_prompt), &integrations);
 
-    let mut agent = Agent::new(
+    let agent = Agent::new(
         agent_config,
         system_prompt,
         memory,
@@ -205,20 +248,7 @@ async fn main() -> anyhow::Result<()> {
         use_openrouter,
     );
 
-    use std::io::{self, Write};
-    let mut input = String::new();
-    loop {
-        print!("user> ");
-        io::stdout().flush()?;
-
-        input.clear();
-        let bytes_read = io::stdin().read_line(&mut input)?;
-        if bytes_read == 0 { break; }
-        let trimmed = input.trim();
-        if trimmed == "exit" { break; }
-        
-        let _reply = agent.step(trimmed).await?;
-    }
+    tui::run_tui(agent).await?;
 
     Ok(())
 }

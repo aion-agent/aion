@@ -1,6 +1,6 @@
 use serde::Deserialize;
-use std::path::Path;
 use std::fs;
+use std::path::Path;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct AppConfig {
@@ -34,12 +34,24 @@ pub struct IntegrationsConfig {
     pub discover: String,
 }
 
-fn default_temperature() -> f64 { 0.6 }
-fn default_max_tokens() -> u32 { 1024 }
-fn default_base_url() -> String { "http://localhost:8080".to_string() }
-fn default_max_history_messages() -> usize { 20 }
-fn default_max_tool_errors() -> usize { 3 }
-fn default_system_prompt() -> String { "system_prompt.txt".to_string() }
+fn default_temperature() -> f64 {
+    0.6
+}
+fn default_max_tokens() -> u32 {
+    1024
+}
+fn default_base_url() -> String {
+    "http://localhost:8080".to_string()
+}
+fn default_max_history_messages() -> usize {
+    20
+}
+fn default_max_tool_errors() -> usize {
+    3
+}
+fn default_system_prompt() -> String {
+    "system_prompt.txt".to_string()
+}
 
 pub fn load_config(path: &Path) -> anyhow::Result<AppConfig> {
     let content = fs::read_to_string(path)?;

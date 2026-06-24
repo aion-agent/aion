@@ -1,7 +1,7 @@
-use serde_json;
 use serde::{Deserialize, Serialize};
-use std::path::{PathBuf, Path};
+use serde_json;
 use std::fs;
+use std::path::Path;
 
 #[derive(Debug, Deserialize)]
 pub struct IntegrationFile {
@@ -12,7 +12,7 @@ pub struct IntegrationFile {
 pub struct IntegrationMeta {
     name: String,
     description: String,
-    tools: String,      // path to tools json
+    tools: String, // path to tools json
     executor: String,
     enabled: bool,
 }
@@ -32,8 +32,6 @@ pub struct ToolSchema {
     pub description: String,
     pub parameters: serde_json::Value,
 }
-
-
 
 pub fn build_system_prompt(template_path: &Path, integrations: &[Integration]) -> String {
     let memory_tools = serde_json::json!([
@@ -83,6 +81,25 @@ pub fn build_system_prompt(template_path: &Path, integrations: &[Integration]) -
                 },
                 "required": ["name", "reason"]
             }
+        },
+        {
+            "name": "switch_memory_scope",
+            "description": "Switch the active memory scope to a child scope or back to 'root'",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": { "type": "string", "description": "The name of the child scope to switch to, or 'root' to switch back to the main database." }
+                },
+                "required": ["name"]
+            }
+        },
+        {
+            "name": "list_memory_scopes",
+            "description": "List all child memory scopes that have been created",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
         }
     ]);
 
@@ -94,15 +111,19 @@ pub fn build_system_prompt(template_path: &Path, integrations: &[Integration]) -
 
     let all_tools = serde_json::json!([
         ..memory_tools.as_array().unwrap().clone(),
-        ..integration_tools.iter()
+        ..integration_tools
+            .iter()
             .map(|t| serde_json::to_value(t).unwrap())
             .collect::<Vec<_>>()
     ]);
 
     let template = fs::read_to_string(template_path)
         .unwrap_or_else(|_| "Failed to load system prompt.".to_string());
-        
-    template.replace("{{TOOLS}}", &serde_json::to_string_pretty(&all_tools).unwrap())
+
+    template.replace(
+        "{{TOOLS}}",
+        &serde_json::to_string_pretty(&all_tools).unwrap(),
+    )
 }
 
 pub fn load_integration(path: &Path) -> anyhow::Result<Integration> {
@@ -127,10 +148,20 @@ pub fn load_integration(path: &Path) -> anyhow::Result<Integration> {
 }
 
 pub fn load_all(dir: &Path) -> Vec<Integration> {
-    fs::read_dir(dir)
-        .unwrap()
+    let read_dir = match fs::read_dir(dir) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!(
+                "Warning: Failed to read integrations directory '{}': {}",
+                dir.display(),
+                e
+            );
+            return Vec::new();
+        }
+    };
+    read_dir
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map(|x| x == "integration").unwrap_or(false))
+        .filter(|e| e.path().extension().map(|x| x == "toml").unwrap_or(false))
         .filter_map(|e| load_integration(&e.path()).ok())
         .collect()
 }
